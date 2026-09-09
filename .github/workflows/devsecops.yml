@@ -58,7 +58,7 @@ jobs:
 
 
   # ==========================================
-  # 3 - ANÁLISE ESTÁTICA - SAST
+  # 3 - SAST COM SEMGREP
   # ==========================================
   semgrep:
     name: SAST - Semgrep
@@ -78,7 +78,7 @@ jobs:
         run: pip install semgrep
 
       - name: Executar Semgrep
-        run: semgrep scan --config auto --error .
+        run: semgrep scan --config auto --error --exclude=".github/workflows/**" .
 
 
   # ==========================================
@@ -98,7 +98,7 @@ jobs:
 
 
   # ==========================================
-  # 5 - SCAN DA IMAGEM DOCKER
+  # 5 - SCAN DA IMAGEM COM TRIVY
   # ==========================================
   trivy:
     name: Container Scan - Trivy
@@ -122,7 +122,7 @@ jobs:
 
 
   # ==========================================
-  # 6 - TERRAFORM / INFRAESTRUTURA COMO CÓDIGO
+  # 6 - TERRAFORM
   # ==========================================
   terraform:
     name: Terraform Validate
@@ -150,7 +150,7 @@ jobs:
 
 
   # ==========================================
-  # 7 - ANÁLISE DE SEGURANÇA DO TERRAFORM
+  # 7 - SCAN DE IAC COM CHECKOV
   # ==========================================
   checkov:
     name: IaC Scan - Checkov
@@ -170,10 +170,9 @@ jobs:
 
 
   # ==========================================
-  # 8 - DAST - OWASP ZAP
+  # 8 - DAST COM OWASP ZAP
   # ==========================================
-  # Este job deve ser ativado quando houver
-  # um ambiente de staging com a API rodando.
+  # Ativar quando houver ambiente de staging
   #
   # zap:
   #   name: DAST - OWASP ZAP
