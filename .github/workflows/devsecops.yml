@@ -48,7 +48,7 @@ jobs:
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Executar testes
         run: npm test
@@ -58,7 +58,7 @@ jobs:
 
 
   # ==========================================
-  # 3 - SAST
+  # 3 - ANÁLISE ESTÁTICA - SAST
   # ==========================================
   semgrep:
     name: SAST - Semgrep
@@ -77,5 +77,111 @@ jobs:
       - name: Instalar Semgrep
         run: pip install semgrep
 
-      - name: Executar análise SAST
+      - name: Executar Semgrep
         run: semgrep scan --config auto --error .
+
+
+  # ==========================================
+  # 4 - BUILD DA IMAGEM DOCKER
+  # ==========================================
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: semgrep
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Build da imagem Docker
+        run: docker build -t devsecops-api:latest .
+
+
+  # ==========================================
+  # 5 - SCAN DA IMAGEM DOCKER
+  # ==========================================
+  trivy:
+    name: Container Scan - Trivy
+    runs-on: ubuntu-latest
+    needs: docker-build
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Build da imagem Docker
+        run: docker build -t devsecops-api:latest .
+
+      - name: Executar Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: devsecops-api:latest
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+
+
+  # ==========================================
+  # 6 - TERRAFORM / INFRAESTRUTURA COMO CÓDIGO
+  # ==========================================
+  terraform:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    needs: trivy
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan
+
+
+  # ==========================================
+  # 7 - ANÁLISE DE SEGURANÇA DO TERRAFORM
+  # ==========================================
+  checkov:
+    name: IaC Scan - Checkov
+    runs-on: ubuntu-latest
+    needs: terraform
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Executar Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform
+          framework: terraform
+          soft_fail: false
+
+
+  # ==========================================
+  # 8 - DAST - OWASP ZAP
+  # ==========================================
+  # Este job deve ser ativado quando houver
+  # um ambiente de staging com a API rodando.
+  #
+  # zap:
+  #   name: DAST - OWASP ZAP
+  #   runs-on: ubuntu-latest
+  #   needs: checkov
+  #
+  #   steps:
+  #     - name: Executar OWASP ZAP
+  #       uses: zaproxy/action-baseline@v0.14.0
+  #       with:
+  #         target: "http://URL-DO-STAGING"
