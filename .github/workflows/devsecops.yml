@@ -11,7 +11,7 @@ on:
 jobs:
 
   # ==========================================
-  # 1. PROTEÇÃO DE SEGREDOS - GITLEAKS
+  # 1 - PROTEÇÃO DE SEGREDOS
   # ==========================================
   gitleaks:
     name: Secret Scan - Gitleaks
@@ -25,20 +25,57 @@ jobs:
 
       - name: Executar Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
   # ==========================================
-  # 2. ANÁLISE ESTÁTICA - SEMGREP
+  # 2 - TESTES E BUILD DA API
   # ==========================================
-  semgrep:
-    name: SAST - Semgrep
+  test-build:
+    name: Testes e Build
     runs-on: ubuntu-latest
+    needs: gitleaks
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Executar Semgrep
-        run: |
-          python -m pip install semgrep
-          semgrep scan --config auto --error
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Compilar TypeScript
+        run: npm run build
+
+
+  # ==========================================
+  # 3 - SAST
+  # ==========================================
+  semgrep:
+    name: SAST - Semgrep
+    runs-on: ubuntu-latest
+    needs: test-build
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Semgrep
+        run: pip install semgrep
+
+      - name: Executar análise SAST
+        run: semgrep scan --config auto --error .
