@@ -1,0 +1,44 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+
+  # ==========================================
+  # 1. PROTEÇÃO DE SEGREDOS - GITLEAKS
+  # ==========================================
+  gitleaks:
+    name: Secret Scan - Gitleaks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Executar Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+
+
+  # ==========================================
+  # 2. ANÁLISE ESTÁTICA - SEMGREP
+  # ==========================================
+  semgrep:
+    name: SAST - Semgrep
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Executar Semgrep
+        run: |
+          python -m pip install semgrep
+          semgrep scan --config auto --error
