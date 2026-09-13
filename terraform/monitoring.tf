@@ -4,6 +4,7 @@
 resource "aws_cloudwatch_log_group" "api_logs" {
   name              = "/aws/ec2/devsecops-api"
   retention_in_days = 30
+  kms_key_id        = aws_kms_key.rds.arn
 
   tags = {
     Name = "devsecops-api-logs"
@@ -100,5 +101,3 @@ resource "aws_cloudwatch_dashboard" "main" {
     ]
   })
 }
-
-

@@ -17,11 +17,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY package*.json ./
+# --- FIX DE SEGURANÇA SEMGREP: Adicionado --chown ---
+COPY --chown=node:node package*.json ./
 RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 
-# Copia os arquivos compilados do TypeScript
-COPY --from=builder /app/dist ./dist
+# Copia os arquivos compilados do TypeScript com permissão correta
+COPY --chown=node:node --from=builder /app/dist ./dist
+# ----------------------------------------------------
 
 # Prática de segurança (DevSecOps): executando com usuário não-root
 USER node
