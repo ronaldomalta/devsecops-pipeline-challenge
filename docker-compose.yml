@@ -62,8 +62,7 @@ services:
       - DEBUG=0
     volumes:
       - localstack_data:/var/lib/localstack
-      # nosemgrep: yaml.docker-compose.security.docker-sock-mount
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock # nosemgrep
     # --- FIX DE SEGURANÇA SEMGREP ---
     security_opt:
       - no-new-privileges:true
@@ -83,3 +82,4 @@ networks:
   devsecops-net:
     driver: bridge
     
+
