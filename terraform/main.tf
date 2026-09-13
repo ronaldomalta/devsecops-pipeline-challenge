@@ -1,9 +1,4 @@
 # =========================
-# IDENTIDADE AWS
-# =========================
-data "aws_caller_identity" "current" {}
-
-# =========================
 # VPC
 # =========================
 resource "aws_vpc" "main" {
@@ -183,7 +178,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # =========================
-# EC2
+# EC2 (SIMPLIFICADA PARA LOCALSTACK)
 # =========================
 resource "aws_instance" "api" {
   ami           = "ami-0c02fb55956c7d316"
@@ -191,20 +186,7 @@ resource "aws_instance" "api" {
 
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.api_sg.id]
-
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-
-  monitoring    = true
-  ebs_optimized = true
-
-  metadata_options {
-    http_endpoint = "enabled"
-    http_tokens   = "required"
-  }
-
-  root_block_device {
-    encrypted = true
-  }
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name = "devsecops-api-server"
@@ -212,199 +194,11 @@ resource "aws_instance" "api" {
 }
 
 # =========================
-# KMS DO RDS
-# =========================
-resource "aws_kms_key" "rds" {
-  description         = "Chave KMS para criptografia do RDS e CloudWatch"
-  enable_key_rotation = true
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-
-    Statement = [
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "AllowCloudWatchLogs"
-        Effect = "Allow"
-
-        Principal = {
-          Service = "logs.${var.aws_region}.amazonaws.com"
-        }
-
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = {
-    Name = "devsecops-rds-kms"
-  }
-}
-
-# =========================
-# PARAMETER GROUP POSTGRESQL
-# =========================
-resource "aws_db_parameter_group" "postgres" {
-  name   = "devsecops-postgres-params"
-  family = "postgres16"
-
-  parameter {
-    name  = "log_statement"
-    value = "all"
-  }
-
-  parameter {
-    name  = "log_min_duration_statement"
-    value = "1"
-  }
-
-  parameter {
-    name  = "rds.force_ssl"
-    value = "1"
-  }
-
-  tags = {
-    Name = "devsecops-postgres-params"
-  }
-}
-
-# =========================
-# IAM ROLE MONITORAMENTO RDS
-# =========================
-resource "aws_iam_role" "rds_monitoring" {
-  name = "devsecops-rds-monitoring-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-
-    Statement = [
-      {
-        Effect = "Allow"
-
-        Principal = {
-          Service = "monitoring.rds.amazonaws.com"
-        }
-
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = {
-    Name = "devsecops-rds-monitoring-role"
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "rds_monitoring" {
-  role       = aws_iam_role.rds_monitoring.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}
-
-# =========================
-# GRUPO DE SUBNETS DO RDS
-# =========================
-resource "aws_db_subnet_group" "postgres" {
-  name = "devsecops-db-subnet-group"
-
-  subnet_ids = [
-    aws_subnet.private_1.id,
-    aws_subnet.private_2.id
-  ]
-
-  tags = {
-    Name = "devsecops-db-subnet-group"
-  }
-}
-
-# =========================
-# POSTGRESQL - RDS
-# =========================
-resource "aws_db_instance" "postgres" {
-  identifier = "devsecops-postgres"
-
-  engine         = "postgres"
-  engine_version = "16"
-
-  instance_class        = "db.t3.micro"
-  allocated_storage     = 20
-  max_allocated_storage = 30
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  port = 5432
-
-  db_subnet_group_name = aws_db_subnet_group.postgres.name
-
-  vpc_security_group_ids = [
-    aws_security_group.db_sg.id
-  ]
-
-  parameter_group_name = aws_db_parameter_group.postgres.name
-
-  publicly_accessible = false
-
-  storage_encrypted = true
-  kms_key_id        = aws_kms_key.rds.arn
-
-  multi_az            = true
-  deletion_protection = true
-
-  auto_minor_version_upgrade = true
-
-  backup_retention_period = 7
-
-  performance_insights_enabled    = true
-  performance_insights_kms_key_id = aws_kms_key.rds.arn
-
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.rds_monitoring.arn
-
-  enabled_cloudwatch_logs_exports = [
-    "postgresql",
-    "upgrade"
-  ]
-
-  iam_database_authentication_enabled = true
-
-  copy_tags_to_snapshot = true
-
-  skip_final_snapshot = true
-
-  tags = {
-    Name = "devsecops-postgres"
-  }
-}
-
-# =========================
 # CLOUDWATCH - VPC FLOW LOGS
 # =========================
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name = "/aws/vpc/devsecops-flow-logs"
-
-  # Checkov exige retenção de pelo menos 1 ano
+  name              = "/aws/vpc/devsecops-flow-logs"
   retention_in_days = 365
-
-  kms_key_id = aws_kms_key.rds.arn
 
   tags = {
     Name = "devsecops-vpc-flow-logs"
@@ -501,3 +295,5 @@ resource "aws_flow_log" "main" {
     Name = "devsecops-vpc-flow-log"
   }
 }
+
+
