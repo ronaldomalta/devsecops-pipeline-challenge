@@ -1,4 +1,9 @@
 # =========================
+# IDENTIDADE AWS
+# =========================
+data "aws_caller_identity" "current" {}
+
+# =========================
 # VPC
 # =========================
 resource "aws_vpc" "main" {
@@ -157,11 +162,9 @@ resource "aws_iam_role" "ec2_role" {
     Statement = [
       {
         Effect = "Allow"
-
         Principal = {
           Service = "ec2.amazonaws.com"
         }
-
         Action = "sts:AssumeRole"
       }
     ]
@@ -178,18 +181,72 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # =========================
-# EC2 (SIMPLIFICADA PARA LOCALSTACK)
+# EC2 (COM SEGURANÇA APLICADA)
 # =========================
 resource "aws_instance" "api" {
-  ami           = "ami-0c02fb55956c7d316"
-  instance_type = "t2.micro"
-
+  ami                    = "ami-0c02fb55956c7d316"
+  instance_type          = "t2.micro"
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.api_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
+  # Ajustes exigidos por ferramentas de DevSecOps
+  monitoring    = true
+  ebs_optimized = true
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name = "devsecops-api-server"
+  }
+}
+
+# =========================
+# CHAVE KMS PARA CLOUDWATCH
+# =========================
+resource "aws_kms_key" "rds" {
+  description         = "Chave KMS para criptografia do CloudWatch"
+  enable_key_rotation = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.us-east-1.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "devsecops-rds-kms"
   }
 }
 
@@ -199,6 +256,7 @@ resource "aws_instance" "api" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/devsecops-flow-logs"
   retention_in_days = 365
+  kms_key_id        = aws_kms_key.rds.arn # Associação da criptografia
 
   tags = {
     Name = "devsecops-vpc-flow-logs"
@@ -217,11 +275,9 @@ resource "aws_iam_role" "vpc_flow_logs" {
     Statement = [
       {
         Effect = "Allow"
-
         Principal = {
           Service = "vpc-flow-logs.amazonaws.com"
         }
-
         Action = "sts:AssumeRole"
       }
     ]
@@ -246,32 +302,26 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
       {
         Sid    = "WriteVPCFlowLogs"
         Effect = "Allow"
-
         Action = [
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-
         Resource = "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"
       },
       {
         Sid    = "DescribeLogStreams"
         Effect = "Allow"
-
         Action = [
           "logs:DescribeLogStreams"
         ]
-
         Resource = aws_cloudwatch_log_group.vpc_flow_logs.arn
       },
       {
         Sid    = "DescribeLogGroups"
         Effect = "Allow"
-
         Action = [
           "logs:DescribeLogGroups"
         ]
-
         Resource = "*"
       }
     ]
@@ -295,5 +345,3 @@ resource "aws_flow_log" "main" {
     Name = "devsecops-vpc-flow-log"
   }
 }
-
-
