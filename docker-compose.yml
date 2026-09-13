@@ -13,6 +13,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # --- FIX DE SEGURANÇA SEMGREP ---
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql
+      - /tmp
+    # ---------------------------------
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agendamento_consultas"]
       interval: 5s
@@ -34,12 +42,44 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # --- FIX DE SEGURANÇA SEMGREP ---
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # ---------------------------------
+    networks:
+      - devsecops-net
+
+  localstack:
+    image: localstack/localstack:3.0.0
+    container_name: devsecops-localstack
+    ports:
+      - "4566:4566" # Porta Gateway unificada do LocalStack
+    environment:
+      - SERVICES=s3,ec2,sqs,sns,cloudwatch,logs,iam,sts,kms
+      - DEBUG=0
+    volumes:
+      - localstack_data:/var/lib/localstack
+    # --- FIX DE SEGURANÇA SEMGREP ---
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/lib/localstack/cache
+    # ---------------------------------
     networks:
       - devsecops-net
 
 volumes:
   postgres_data:
+  localstack_data:
 
 networks:
   devsecops-net:
     driver: bridge
+    
+
+

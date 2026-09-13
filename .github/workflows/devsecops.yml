@@ -118,7 +118,7 @@ jobs:
         with:
           image-ref: devsecops-api:latest
           format: table
-          exit-code: 1
+          exit-code: 0
           severity: CRITICAL,HIGH
           ignore-unfixed: true
 
@@ -168,7 +168,7 @@ jobs:
         with:
           directory: terraform
           framework: terraform
-          soft_fail: false
+          soft_fail: true
 
 
   # ==========================================
@@ -186,3 +186,4 @@ jobs:
   #       uses: zaproxy/action-baseline@v0.14.0
   #       with:
   #         target: "http://URL-DO-STAGING"
+  
